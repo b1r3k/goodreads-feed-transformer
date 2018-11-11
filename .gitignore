@@ -106,3 +106,4 @@ ENV/
 .mypy_cache/
 
 coverage/
+etc/local.ini
