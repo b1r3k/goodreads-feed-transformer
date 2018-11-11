@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+import time
 from email.utils import parsedate_to_datetime
 
 import lxml.html
@@ -8,18 +9,84 @@ import lxml.etree
 
 
 from aiohttp import web, ClientSession
+import aioredis
 
 
 logger = logging.getLogger(__name__)
+
+HTTP_SESSION = 'http.session'
+DB_REDIS = 'redis'
+REDIS_PREFIX = '1~'
+
+MAX_LOCATION_STORAGE = 3600 * 4 # 4h
+IFTTT_APPLET_SECRET = 'YmUwNWY5MWRmMWJjOWRlNWFlZTJmNzdk'
+SETTINGS = 'settings'
 
 
 class ParserError(BaseException):
     pass
 
 
-def initialize_endpoints(app, settings):
+async def store_event_marker(redis_pool, event_id, occured_at=None):
+    timestamp = occured_at or int(time.time())
+
+    with await redis_pool as redis:
+        key = '{}{}'.format(REDIS_PREFIX, event_id)
+        res = await redis.setnx(key, timestamp)
+        if res:
+            redis.setex(key, timestamp + MAX_LOCATION_STORAGE)
+
+
+async def remove_event_marker(redis_pool, event_id):
+    key = '{}{}'.format(REDIS_PREFIX, event_id)
+    with await redis_pool as redis:
+        await redis.delete(key)
+
+
+async def get_event_marker(redis_pool, event_id):
+    key = '{}{}'.format(REDIS_PREFIX, event_id)
+    with await redis_pool as redis:
+        timestamp = await redis.get(key)
+        return timestamp
+
+
+async def trigger_maker_event(http_session, event_name, data, maker_key):
+    url = 'https://maker.ifttt.com/trigger/{}/with/key/{}'.format(event_name, maker_key)
+    with http_session as http:
+        await http.post(url, json=data)
+
+
+async def handle_location(req):
+    dbredis = app[DB_REDIS]
+    settings = app[SETTINGS]
+    device_id = req.match_info['device_id']
+    location_id = req.match_info['location_id']
+    event_name = req.match_info['event_name']
+    event_marker_id = '{}/{}/{}'.format(device_id, location_id, event_name)
+    data = await req.json()
+    if data['secret'] != IFTTT_APPLET_SECRET:
+        raise web.HTTPForbidden(reason='bad secret')
+    session = req.app[HTTP_SESSION]
+    if data['action'].lower == 'entered':
+        await store_event_marker(dbredis, event_marker_id)
+    if data['action'].lower == 'exited':
+        started_at = await get_event_marker(dbredis, event_marker_id)
+        if started_at is None:
+            logger.error('Got exit but never entered for location: %s from device: %s', location_id, device_id)
+        now = int(time.time())
+        delta = now - int(started_at) / 60. / 60.  # seconds -> hours
+        payload = {
+            'value1': float("{0:.2f}".format(delta))
+        }
+        await trigger_maker_event(session, event_name, payload, settings['ifttt.maker_key'])
+        await remove_event_marker(dbredis, event_marker_id)
+    raise web.HTTPOk()
+
+
+def initialize_endpoints(app):
     logger.info('Initializing http endpoints')
     app.router.add_get('/user_status/list/{user_id}', get_user_status_list)
+    app.router.add_post('/location/{device_id}/{location_id}/{event_name}', handle_location)
 
 
 def get_data(title_str):
@@ -106,6 +173,21 @@ async def get_user_status_list(req):
     return web.Response(body=new_feed, content_type='application/rss+xml')
 
 
+async def bootstrap(app):
+    settings = app[SETTINGS]
+    redis_addr = settings.get('db.redis', 'localhost:6379')
+    host, port = redis_addr.strip().split(':')
+    app[DB_REDIS] = await asyncio.wait_for(
+        aioredis.create_redis_pool((host, int(port)), minsize=0, maxsize=5, loop=app.loop), 3, loop=app.loop)
+    app[HTTP_SESSION] = ClientSession()
+
+
+async def stop_all():
+    await app[HTTP_SESSION].close()
+    app[DB_REDIS].close()
+    await app[DB_REDIS].wait_closed()
+
+
 def app(global_config, **settings):
     config_filename = global_config.get('__file__')
     logging.config.fileConfig(config_filename or {}, global_config, False)
@@ -115,7 +197,11 @@ def app(global_config, **settings):
     loop.set_debug(debug)
 
     app = web.Application(logger=logger, loop=loop)
+    app[SETTINGS] = settings
 
-    initialize_endpoints(app, settings)
+    app.on_startup.append(bootstrap)
+    app.on_cleanup.append(stop_all)
+    initialize_endpoints(app)
+    app.freeze()
 
     return app

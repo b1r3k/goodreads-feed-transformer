@@ -1,4 +1,5 @@
 aiohttp==3.2.1
 PasteDeploy==1.5.2
 gunicorn==19.9.0
+aioredis==1.2.0
 lxml
