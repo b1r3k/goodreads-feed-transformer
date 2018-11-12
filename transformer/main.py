@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 import time
+from datetime import timezone
 from email.utils import parsedate_to_datetime
 
 import lxml.html
@@ -65,11 +66,15 @@ async def handle_location(req):
     event_name = req.match_info['event_name']
     event_marker_id = '{}/{}/{}'.format(device_id, location_id, event_name)
     data = await req.json()
+    if data['secret'] != IFTTT_APPLET_SECRET:
+        raise web.HTTPForbidden(reason='bad secret')
     try:
-        if data['secret'] != IFTTT_APPLET_SECRET:
-            raise web.HTTPForbidden(reason='bad secret')
         if data['action'].lower == 'entered':
-            await store_event_marker(dbredis, event_marker_id)
+            occured_at = data.get('occuredAt', None)
+            if occured_at:
+                occured_at = parsedate_to_datetime(occured_at)
+                occured_at = occured_at.timestamp()
+            await store_event_marker(dbredis, event_marker_id, occured_at)
         if data['action'].lower == 'exited':
             started_at = await get_event_marker(dbredis, event_marker_id)
             if started_at is None:
@@ -82,7 +87,7 @@ async def handle_location(req):
             await trigger_maker_event(session, event_name, payload, settings['ifttt.maker_key'])
             await remove_event_marker(dbredis, event_marker_id)
         raise web.HTTPOk()
-    except Exception as ex:
+    except Exception:
         logger.exception('Cannot handle data: %s', data)
         raise web.HTTPServerError()
 
