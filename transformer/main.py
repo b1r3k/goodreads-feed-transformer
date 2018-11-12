@@ -57,30 +57,34 @@ async def trigger_maker_event(http_session, event_name, data, maker_key):
 
 
 async def handle_location(req):
-    dbredis = app[DB_REDIS]
-    settings = app[SETTINGS]
+    dbredis = req.app[DB_REDIS]
+    settings = req.app[SETTINGS]
+    session = req.app[HTTP_SESSION]
     device_id = req.match_info['device_id']
     location_id = req.match_info['location_id']
     event_name = req.match_info['event_name']
     event_marker_id = '{}/{}/{}'.format(device_id, location_id, event_name)
     data = await req.json()
-    if data['secret'] != IFTTT_APPLET_SECRET:
-        raise web.HTTPForbidden(reason='bad secret')
-    session = req.app[HTTP_SESSION]
-    if data['action'].lower == 'entered':
-        await store_event_marker(dbredis, event_marker_id)
-    if data['action'].lower == 'exited':
-        started_at = await get_event_marker(dbredis, event_marker_id)
-        if started_at is None:
-            logger.error('Got exit but never entered for location: %s from device: %s', location_id, device_id)
-        now = int(time.time())
-        delta = now - int(started_at) / 60. / 60.  # seconds -> hours
-        payload = {
-            'value1': float("{0:.2f}".format(delta))
-        }
-        await trigger_maker_event(session, event_name, payload, settings['ifttt.maker_key'])
-        await remove_event_marker(dbredis, event_marker_id)
-    raise web.HTTPOk()
+    try:
+        if data['secret'] != IFTTT_APPLET_SECRET:
+            raise web.HTTPForbidden(reason='bad secret')
+        if data['action'].lower == 'entered':
+            await store_event_marker(dbredis, event_marker_id)
+        if data['action'].lower == 'exited':
+            started_at = await get_event_marker(dbredis, event_marker_id)
+            if started_at is None:
+                logger.error('Got exit but never entered for location: %s from device: %s', location_id, device_id)
+            now = int(time.time())
+            delta = now - int(started_at) / 60. / 60.  # seconds -> hours
+            payload = {
+                'value1': float("{0:.2f}".format(delta))
+            }
+            await trigger_maker_event(session, event_name, payload, settings['ifttt.maker_key'])
+            await remove_event_marker(dbredis, event_marker_id)
+        raise web.HTTPOk()
+    except Exception as ex:
+        logger.exception('Cannot handle data: %s', data)
+        raise web.HTTPServerError()
 
 
 def initialize_endpoints(app):
