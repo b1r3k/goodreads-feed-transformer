@@ -2,7 +2,7 @@ import asyncio
 import logging
 import re
 import time
-from datetime import timezone
+import signal
 from email.utils import parsedate_to_datetime
 
 import lxml.html
@@ -210,6 +210,8 @@ def app(global_config, **settings):
 
     app.on_startup.append(bootstrap)
     app.on_cleanup.append(stop_all)
+    signal.signal(signal.SIGINT, app.shutdown)
+    signal.signal(signal.SIGTERM, app.shutdown)
     initialize_endpoints(app)
     app.freeze()
 
