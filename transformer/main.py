@@ -13,36 +13,13 @@ from aiohttp import web, ClientSession
 import aioredis
 
 from .const import *
+from .store.events import store_event_marker, remove_event_marker, get_event_marker
 
 logger = logging.getLogger(__name__)
 
 
 class ParserError(BaseException):
     pass
-
-
-async def store_event_marker(redis_pool, event_id, occured_at=None):
-    timestamp = occured_at or int(time.time())
-
-    with await redis_pool as redis:
-        logger.info('Storing event marker..')
-        key = '{}{}'.format(REDIS_PREFIX, event_id)
-        res = await redis.setnx(key, timestamp)
-        if res:
-            redis.setex(key, timestamp + MAX_LOCATION_STORAGE)
-
-
-async def remove_event_marker(redis_pool, event_id):
-    key = '{}{}'.format(REDIS_PREFIX, event_id)
-    with await redis_pool as redis:
-        await redis.delete(key)
-
-
-async def get_event_marker(redis_pool, event_id):
-    key = '{}{}'.format(REDIS_PREFIX, event_id)
-    with await redis_pool as redis:
-        timestamp = await redis.get(key)
-        return timestamp
 
 
 async def trigger_maker_event(http_session, event_name, data, maker_key):
@@ -63,13 +40,13 @@ async def handle_location(req):
     if data['secret'] != IFTTT_APPLET_SECRET:
         raise web.HTTPForbidden(reason='bad secret')
     try:
-        if data['action'].lower == 'entered':
+        if data['action'].lower() == 'entered':
             occured_at = data.get('occuredAt', None)
             if occured_at:
                 occured_at = parsedate_to_datetime(occured_at)
                 occured_at = occured_at.timestamp()
             await store_event_marker(dbredis, event_marker_id, occured_at)
-        if data['action'].lower == 'exited':
+        if data['action'].lower() == 'exited':
             started_at = await get_event_marker(dbredis, event_marker_id)
             if started_at is None:
                 logger.error('Got exit but never entered for location: %s from device: %s', location_id, device_id)
