@@ -118,8 +118,8 @@ def transform_feed(feed_text):
         for update in sorted(feed_items[book_title], key=lambda k: k[2], reverse=True):
             if date > update[2]:
                 diff = read - update[0]
-                content_tag = lxml.etree.SubElement(item, 'description')
-                content_tag.text = str(diff)
+                desc_tag = item.xpath('description')[0]
+                desc_tag.text = str(diff)
                 break
     xml_as_str = lxml.etree.tostring(feed, encoding='utf8', pretty_print=True)
     return xml_as_str
