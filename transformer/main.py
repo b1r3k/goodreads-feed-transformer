@@ -12,16 +12,9 @@ import lxml.etree
 from aiohttp import web, ClientSession
 import aioredis
 
+from .const import *
 
 logger = logging.getLogger(__name__)
-
-HTTP_SESSION = 'http.session'
-DB_REDIS = 'redis'
-REDIS_PREFIX = '1~'
-
-MAX_LOCATION_STORAGE = 3600 * 4 # 4h
-IFTTT_APPLET_SECRET = 'YmUwNWY5MWRmMWJjOWRlNWFlZTJmNzdk'
-SETTINGS = 'settings'
 
 
 class ParserError(BaseException):
@@ -32,6 +25,7 @@ async def store_event_marker(redis_pool, event_id, occured_at=None):
     timestamp = occured_at or int(time.time())
 
     with await redis_pool as redis:
+        logger.info('Storing event marker..')
         key = '{}{}'.format(REDIS_PREFIX, event_id)
         res = await redis.setnx(key, timestamp)
         if res:
@@ -86,7 +80,7 @@ async def handle_location(req):
             }
             await trigger_maker_event(session, event_name, payload, settings['ifttt.maker_key'])
             await remove_event_marker(dbredis, event_marker_id)
-        raise web.HTTPOk()
+        return web.HTTPOk()
     except Exception:
         logger.exception('Cannot handle data: %s', data)
         raise web.HTTPServerError()
@@ -147,7 +141,7 @@ def transform_feed(feed_text):
         for update in sorted(feed_items[book_title], key=lambda k: k[2], reverse=True):
             if date > update[2]:
                 diff = read - update[0]
-                content_tag = lxml.etree.SubElement(item, 'content')
+                content_tag = lxml.etree.SubElement(item, 'description')
                 content_tag.text = str(diff)
                 break
     xml_as_str = lxml.etree.tostring(feed, encoding='utf8', pretty_print=True)
@@ -162,6 +156,7 @@ async def get_user_status_list(req):
     async with ClientSession() as session:
         headers = {}
         try:
+            logger.info('Checking cache..')
             with open('./data/{}'.format(user_id), 'r') as cache:
                 data = cache.readline()
                 lastmodm, last_etag = data.strip().split(' ')
@@ -170,6 +165,7 @@ async def get_user_status_list(req):
         except FileNotFoundError:
             pass
         async with session.get(goodreads_url, headers=headers) as resp:
+            logger.info('')
             if resp.status == 304:
                 return web.HTTPNotModified()
             last_modified = resp.headers.get('last-modified', '')
