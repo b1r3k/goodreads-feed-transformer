@@ -99,28 +99,32 @@ def transform_feed(feed_text):
         date_raw = item.xpath('pubDate')[0]
         date = parsedate_to_datetime(date_raw.text)
         try:
-            read, total, book_title = get_data(title.text)
+            current_page, total, book_title = get_data(title.text)
         except ParserError:
             logger.warning('Cannot parse string: %s', title.text)
             continue
         updates = feed_items.get(book_title, [])
-        updates.append((read, total, date))
+        updates.append((current_page, total, date))
         feed_items[book_title] = updates
     for item in items:
         title = item.xpath('title')[0]
         date_raw = item.xpath('pubDate')[0]
         date = parsedate_to_datetime(date_raw.text)
+        diff = None
         try:
-            read, total, book_title = get_data(title.text)
+            current_page, total, book_title = get_data(title.text)
         except ParserError:
             logger.warning('Cannot parse string: %s', title.text)
             continue
         for update in sorted(feed_items[book_title], key=lambda k: k[2], reverse=True):
             if date > update[2]:
-                diff = read - update[0]
-                desc_tag = item.xpath('description')[0]
-                desc_tag.text = str(diff)
+                diff = current_page - update[0]
                 break
+        # no updates before? means it's first update
+        if diff is None:
+            diff = current_page
+        desc_tag = item.xpath('description')[0]
+        desc_tag.text = str(diff)
     xml_as_str = lxml.etree.tostring(feed, encoding='utf8', pretty_print=True)
     return xml_as_str
 
