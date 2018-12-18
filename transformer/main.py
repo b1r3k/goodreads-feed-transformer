@@ -24,7 +24,7 @@ class ParserError(BaseException):
 
 async def trigger_maker_event(http_session, event_name, data, maker_key):
     url = 'https://maker.ifttt.com/trigger/{}/with/key/{}'.format(event_name, maker_key)
-    with http_session as http:
+    async with http_session as http:
         await http.post(url, json=data)
 
 
