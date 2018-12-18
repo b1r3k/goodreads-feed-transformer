@@ -51,7 +51,7 @@ async def handle_location(req):
             if started_at is None:
                 logger.error('Got exit but never entered for location: %s from device: %s', location_id, device_id)
             now = int(time.time())
-            delta = now - int(started_at) / 60. / 60.  # seconds -> hours
+            delta = (now - int(started_at)) / 60. / 60.  # seconds -> hours
             payload = {
                 'value1': float("{0:.2f}".format(delta))
             }
