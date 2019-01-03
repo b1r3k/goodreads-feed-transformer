@@ -24,8 +24,7 @@ class ParserError(BaseException):
 
 async def trigger_maker_event(http_session, event_name, data, maker_key):
     url = 'https://maker.ifttt.com/trigger/{}/with/key/{}'.format(event_name, maker_key)
-    async with http_session as http:
-        await http.post(url, json=data)
+    await http_session.post(url, json=data)
 
 
 async def handle_location(req):
@@ -131,31 +130,30 @@ def transform_feed(feed_text):
 
 async def get_user_status_list(req):
     user_id =req.match_info['user_id']
+    session = req.app[HTTP_SESSION]
     if not user_id:
         return web.HTTPBadRequest(text='Expected /user_status/list/{user_id}')
     goodreads_url = 'https://www.goodreads.com/user_status/list/{}?format=rss'.format(user_id)
-    async with ClientSession() as session:
-        headers = {}
-        try:
-            logger.info('Checking cache..')
-            with open('./data/{}'.format(user_id), 'r') as cache:
-                data = cache.readline()
-                lastmodm, last_etag = data.strip().split(' ')
-            headers['If-Modified-Since'] = lastmodm
-            headers['If-None-Match'] = last_etag
-        except FileNotFoundError:
-            pass
-        async with session.get(goodreads_url, headers=headers) as resp:
-            logger.info('')
-            if resp.status == 304:
-                return web.HTTPNotModified()
-            last_modified = resp.headers.get('last-modified', '')
-            etag = resp.headers.get('etag', '')
-            if last_modified and etag:
-                with open('./data/{}'.format(user_id), 'w') as cache:
-                    cache.write('{} {}'.format(last_modified, etag))
-            raw_feed = await resp.text()
-            new_feed = transform_feed(raw_feed.encode('utf-8'))
+    headers = {}
+    try:
+        logger.info('Checking cache..')
+        with open('./data/{}'.format(user_id), 'r') as cache:
+            data = cache.readline()
+            lastmodm, last_etag = data.strip().split(' ')
+        headers['If-Modified-Since'] = lastmodm
+        headers['If-None-Match'] = last_etag
+    except FileNotFoundError:
+        pass
+    async with session.get(goodreads_url, headers=headers) as resp:
+        if resp.status == 304:
+            return web.HTTPNotModified()
+        last_modified = resp.headers.get('last-modified', '')
+        etag = resp.headers.get('etag', '')
+        if last_modified and etag:
+            with open('./data/{}'.format(user_id), 'w') as cache:
+                cache.write('{} {}'.format(last_modified, etag))
+        raw_feed = await resp.text()
+        new_feed = transform_feed(raw_feed.encode('utf-8'))
     return web.Response(body=new_feed, content_type='application/rss+xml')
 
 
@@ -165,7 +163,7 @@ async def bootstrap(app):
     host, port = redis_addr.strip().split(':')
     app[DB_REDIS] = await asyncio.wait_for(
         aioredis.create_redis_pool((host, int(port)), minsize=0, maxsize=5, loop=app.loop), 3, loop=app.loop)
-    app[HTTP_SESSION] = ClientSession()
+    app[HTTP_SESSION] = await ClientSession().__aenter__()
 
 
 async def stop_all():
