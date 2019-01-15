@@ -12,7 +12,7 @@ async def store_event_marker(redis_pool, event_id, occured_at=None):
     key = '{}{}'.format(REDIS_PREFIX, event_id)
     res = await redis_pool.setnx(key, timestamp)
     if res:
-        await redis_pool.setex(key, timestamp + MAX_LOCATION_STORAGE)
+        await redis_pool.setex(key, MAX_LOCATION_STORAGE, timestamp)
 
 
 async def remove_event_marker(redis_pool, event_id):
