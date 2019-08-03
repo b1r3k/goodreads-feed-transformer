@@ -35,6 +35,7 @@ async def handle_location(req):
     location_id = req.match_info['location_id']
     event_name = req.match_info['event_name']
     event_marker_id = '{}/{}/{}'.format(device_id, location_id, event_name)
+    logger.info('Received event marker: %s', event_marker_id)
     data = await req.json()
     if data['secret'] != IFTTT_APPLET_SECRET:
         raise web.HTTPForbidden(reason='bad secret')
@@ -133,6 +134,7 @@ def transform_feed(feed_text):
 
 
 async def get_user_status_list(req):
+    date_etag_separator = ' || '
     user_id =req.match_info['user_id']
     session = req.app[HTTP_SESSION]
     if not user_id:
@@ -143,7 +145,7 @@ async def get_user_status_list(req):
         logger.info('Checking cache..')
         with open('./data/{}'.format(user_id), 'r') as cache:
             data = cache.readline()
-            lastmodm, last_etag = data.strip().split(' ')
+            lastmodm, last_etag = data.strip().split(date_etag_separator)
         headers['If-Modified-Since'] = lastmodm
         headers['If-None-Match'] = last_etag
     except FileNotFoundError:
@@ -155,7 +157,7 @@ async def get_user_status_list(req):
         etag = resp.headers.get('etag', '')
         if last_modified and etag:
             with open('./data/{}'.format(user_id), 'w') as cache:
-                cache.write('{} {}'.format(last_modified, etag))
+                cache.write('{}{}{}'.format(last_modified, date_etag_separator, etag))
         raw_feed = await resp.text()
         new_feed = transform_feed(raw_feed.encode('utf-8'))
     return web.Response(body=new_feed, content_type='application/rss+xml')
