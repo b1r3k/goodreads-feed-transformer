@@ -14,6 +14,7 @@ import aioredis
 
 from .const import *
 from .store.events import store_event_marker, remove_event_marker, get_event_marker
+from .github_webhooks import handle_github_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -59,18 +60,18 @@ async def handle_location(req):
             payload = {
                 'value1': float("{0:.2f}".format(delta))
             }
-            await trigger_maker_event(session, event_name, payload, settings['ifttt.maker_key'])
+            await trigger_maker_event(session, event_name, payload, settings.get(IFTTT_MAKER_KEY))
             await remove_event_marker(dbredis, event_marker_id)
         return web.HTTPOk()
     except Exception:
         logger.exception('Cannot handle data: %s', data)
         raise web.HTTPServerError()
 
-
 def initialize_endpoints(app):
     logger.info('Initializing http endpoints')
     app.router.add_get('/user_status/list/{user_id}', get_user_status_list)
     app.router.add_post('/location/{device_id}/{location_id}/{event_name}', handle_location)
+    app.router.add_post('/github/{user}', handle_github_webhook)
 
 
 def get_data(title_str):
