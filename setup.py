@@ -9,10 +9,19 @@ with open('requirements.txt', 'r') as f:
         ] if not s.startswith('#') and s != ''
     ]
 
+
+test_requirements = (
+    'nose',
+    'flake8',
+    'coverage',
+    'mypy',
+    'asynctest'
+)
+
 setup(name='feed-transformer',
       version=version,
       description='goodreads-feed-transformer',
-      url='https://www.getkeepsafe.com/',
+      url='https://github.com/b1r3k/goodreads-feed-transformer',
       packages=['transformer'],
       classifiers=[
           'Programming Language :: Python',
@@ -20,7 +29,10 @@ setup(name='feed-transformer',
           'Programming Language :: Python :: 3.6',
           'Operating System :: POSIX',
       ],
-      install_reqs=install_reqs,
+      install_requires=install_reqs,
+      extras_require={
+          'dev': test_requirements
+      },
       entry_points={
           'paste.app_factory': ['app = transformer:app'],
       })
