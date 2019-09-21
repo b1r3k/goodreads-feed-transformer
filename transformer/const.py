@@ -8,3 +8,4 @@ SETTINGS = 'settings'
 
 GH_SECRET = 'github.secret'
 IFTTT_MAKER_KEY = 'ifttt.maker_key'
+ARQ = 'arq_client'

@@ -7,12 +7,12 @@ from email.utils import parsedate_to_datetime
 
 import lxml.html
 import lxml.etree
-
-
 from aiohttp import web, ClientSession
 import aioredis
+from arq import create_pool
+from arq.connections import RedisSettings
 
-from .const import DB_REDIS, SETTINGS, HTTP_SESSION, IFTTT_APPLET_SECRET, IFTTT_MAKER_KEY
+from .const import DB_REDIS, SETTINGS, HTTP_SESSION, IFTTT_APPLET_SECRET, IFTTT_MAKER_KEY, ARQ
 from .store.events import store_event_marker, remove_event_marker, get_event_marker
 from .github_webhooks import handle_github_webhook
 
@@ -172,11 +172,12 @@ async def bootstrap(app):
     app[DB_REDIS] = await asyncio.wait_for(
         aioredis.create_redis_pool((host, int(port)), minsize=0, maxsize=5, loop=app.loop), 3, loop=app.loop)
     app[HTTP_SESSION] = await ClientSession().__aenter__()
+    app[ARQ] = await create_pool(RedisSettings(*redis_addr.split(':')))
 
 
 async def stop_all():
     await app[HTTP_SESSION].close()
-    app[DB_REDIS].close()
+    await app[ARQ].wait_closed()
     await app[DB_REDIS].wait_closed()
 
 
