@@ -12,7 +12,7 @@ import lxml.etree
 from aiohttp import web, ClientSession
 import aioredis
 
-from .const import *
+from .const import DB_REDIS, SETTINGS, HTTP_SESSION, IFTTT_APPLET_SECRET, IFTTT_MAKER_KEY
 from .store.events import store_event_marker, remove_event_marker, get_event_marker
 from .github_webhooks import handle_github_webhook
 
@@ -67,6 +67,7 @@ async def handle_location(req):
         logger.exception('Cannot handle data: %s', data)
         raise web.HTTPServerError()
 
+
 def initialize_endpoints(app):
     logger.info('Initializing http endpoints')
     app.router.add_get('/user_status/list/{user_id}', get_user_status_list)
@@ -83,7 +84,7 @@ def get_data(title_str):
     :param title_str:
     :return: 80, 496
     """
-    pages_regex = re.compile('.*\s(\d+)\sof\s(\d+)\sof\s(.*)')
+    pages_regex = re.compile(r'.*\s(\d+)\sof\s(\d+)\sof\s(.*)')
     try:
         match = pages_regex.match(title_str)
         read = int(match.group(1))
@@ -136,7 +137,7 @@ def transform_feed(feed_text):
 
 async def get_user_status_list(req):
     date_etag_separator = ' || '
-    user_id =req.match_info['user_id']
+    user_id = req.match_info['user_id']
     session = req.app[HTTP_SESSION]
     if not user_id:
         return web.HTTPBadRequest(text='Expected /user_status/list/{user_id}')

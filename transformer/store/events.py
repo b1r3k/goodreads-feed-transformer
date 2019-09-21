@@ -1,7 +1,7 @@
 import logging
 import time
 
-from ..const import *
+from ..const import REDIS_PREFIX, MAX_LOCATION_STORAGE
 
 logger = logging.getLogger(__name__)
 

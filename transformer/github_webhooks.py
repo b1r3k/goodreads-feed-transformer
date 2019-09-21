@@ -4,7 +4,7 @@ import json
 
 from aiohttp import web
 
-from .const import *
+from .const import SETTINGS, HTTP_SESSION, GH_SECRET
 
 
 logger = logging.getLogger(__name__)
