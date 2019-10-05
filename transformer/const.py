@@ -1,3 +1,6 @@
+ISO_DATE_FMT = "%Y-%m-%dT%H:%M:%S%z"
+DAY_DATE_FMT = "%Y-%m-%d"
+
 HTTP_SESSION = 'http.session'
 DB_REDIS = 'redis'
 REDIS_PREFIX = '1~'
@@ -9,3 +12,4 @@ SETTINGS = 'settings'
 GH_SECRET = 'github.secret'
 IFTTT_MAKER_KEY = 'ifttt.maker_key'
 ARQ = 'arq_client'
+BEEMINDER = 'beeminder.client'
